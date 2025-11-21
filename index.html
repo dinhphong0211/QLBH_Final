@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trình Quản lý Đơn Hàng</title>
+    
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#ffffff">
+    <link rel="apple-touch-icon" href="icon-192.png">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Thư viện Pháo hoa -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        input[type=number]::-webkit-inner-spin-button,
+        input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        input[type=number] { -moz-appearance: textfield; text-align: center; }
+        /* Hiệu ứng bấm nút */
+        .btn-active:active { transform: scale(0.95); }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center p-2 md:p-4">
+
+    <div class="bg-white p-3 md:p-6 rounded-xl shadow-lg w-full max-w-lg mb-20">
+        
+        <div class="flex justify-between items-center mb-6">
+            <h1 class="text-xl md:text-2xl font-bold text-gray-800 flex items-center gap-2">
+                🍔 Quản Lý Bán Hàng
+            </h1>
+            <button id="reset-btn" class="text-xs md:text-sm text-red-500 hover:text-red-700 underline font-medium">
+                Làm mới
+            </button>
+        </div>
+
+        <!-- Khu vực nhập liệu -->
+        <div class="mb-6">
+            <div class="flex justify-between text-xs font-bold text-gray-500 mb-2 px-1 uppercase tracking-wider">
+                <span class="w-1/3">Mặt hàng</span>
+                <div class="flex justify-around w-2/3">
+                    <span>Nhận</span>
+                    <span>Trả</span>
+                </div>
+            </div>
+            <div id="item-list" class="space-y-3">
+                <!-- JS chèn input vào đây -->
+            </div>
+        </div>
+
+        <!-- Khu vực Nút bấm -->
+        <div class="flex flex-col gap-3 my-6">
+            <button id="calculate-btn" class="btn-active w-full bg-gradient-to-r from-blue-600 to-blue-500 text-white font-bold py-3 px-4 rounded-lg shadow-lg hover:from-blue-700 hover:to-blue-600 transition duration-200 text-lg flex items-center justify-center gap-2">
+                <span>🚀</span> TÍNH TOÁN NGAY
+            </button>
+            
+            <div class="grid grid-cols-2 gap-3">
+                <button id="copy-nhan-btn" class="btn-active bg-green-50 text-green-700 font-bold py-3 px-4 rounded-lg border border-green-200 hover:bg-green-100 transition duration-200 text-sm flex items-center justify-center gap-1">
+                    📥 Copy Nhận
+                </button>
+                <button id="copy-tra-btn" class="btn-active bg-red-50 text-red-700 font-bold py-3 px-4 rounded-lg border border-red-200 hover:bg-red-100 transition duration-200 text-sm flex items-center justify-center gap-1">
+                    📤 Copy Trả
+                </button>
+            </div>
+        </div>
+
+        <hr class="my-6 border-gray-200">
+
+        <!-- Khu vực kết quả -->
+        <div id="results-wrapper" class="hidden animate-fade-in">
+            
+            <!-- Tổng tiền -->
+            <div class="bg-gray-900 text-white p-4 rounded-xl shadow-xl mb-6 relative overflow-hidden">
+                <div class="absolute top-0 right-0 -mt-2 -mr-2 w-16 h-16 bg-white opacity-10 rounded-full"></div>
+                <div class="flex justify-between items-center mb-2 relative z-10">
+                    <span class="text-gray-400 text-xs font-bold uppercase">Tổng doanh thu</span>
+                    <span id="total-revenue-large" class="text-3xl font-bold text-green-400">0 ₫</span>
+                </div>
+                <div class="border-t border-gray-700 pt-2 flex justify-between items-center relative z-10">
+                    <span class="text-gray-400 text-xs font-bold uppercase">Tổng bánh (cả vỏ dư)</span>
+                    <span id="total-burgers" class="text-xl font-bold text-yellow-400">0 cái</span>
+                </div>
+            </div>
+
+            <h2 class="text-lg font-bold text-gray-800 mb-3">🏆 Chi tiết Bán hàng</h2>
+            <div id="result-container" class="mb-6">
+                <ul id="order-summary" class="space-y-2"></ul>
+            </div>
+
+            <h2 class="text-lg font-bold text-gray-800 mb-3 pt-4 border-t">📊 Số lượng (Nhận - Trả)</h2>
+            <div class="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                <ul id="net-sales-list" class="space-y-1 text-sm text-gray-600"></ul>
+            </div>
+        </div>
+        
+        <div id="empty-state" class="text-center text-gray-400 text-sm mt-10">
+            <p class="mb-2">👋 Xin chào!</p>
+            <p>Hãy nhập số liệu để bắt đầu.</p>
+        </div>
+    </div>
+
+    <div id="toast" class="fixed bottom-10 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-6 py-3 rounded-full shadow-2xl text-sm hidden transition-all duration-300 z-50 font-medium">
+        Đã sao chép!
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const items = [
+                'Vỏ bánh', 'Bò', 'Tôm', 'Gà', 'Xúc xích', 'Trứng', 'Phô mai',
+                'Bơ', 'Tương cà', 'Tương ớt', 'Rau', 'Gas'
+            ];
+            
+            const recipes = [
+                { name: 'Burger Bò Trứng', price: 20000, ingredients: { 'Vỏ bánh': 1, 'Bò': 1, 'Trứng': 1 }, color: 'text-green-700', bgColor: 'bg-green-50' },
+                { name: 'Burger Bò', price: 18000, ingredients: { 'Vỏ bánh': 1, 'Bò': 1 }, color: 'text-indigo-700', bgColor: 'bg-indigo-50' },
+                { name: 'Burger Tôm', price: 20000, ingredients: { 'Vỏ bánh': 1, 'Tôm': 1 }, color: 'text-purple-700', bgColor: 'bg-purple-50' },
+                { name: 'Burger Gà', price: 20000, ingredients: { 'Vỏ bánh': 1, 'Gà': 1 }, color: 'text-orange-700', bgColor: 'bg-orange-50' },
+                { name: 'Burger Xúc Xích', price: 20000, ingredients: { 'Vỏ bánh': 1, 'Xúc xích': 1 }, color: 'text-red-700', bgColor: 'bg-red-50' },
+                { name: 'Burger Trứng', price: 10000, ingredients: { 'Vỏ bánh': 1, 'Trứng': 1 }, color: 'text-yellow-700', bgColor: 'bg-yellow-50' }
+            ];
+
+            const leftoverPrices = { 
+                'Vỏ bánh': 8000, 'Bò': 10000, 'Tôm': 12000, 'Gà': 12000, 
+                'Xúc xích': 12000, 'Trứng': 2000, 'Phô mai': 5000 
+            };
+
+            const itemList = document.getElementById('item-list');
+            const summaryList = document.getElementById('order-summary');
+            const netSalesList = document.getElementById('net-sales-list');
+            const calculateBtn = document.getElementById('calculate-btn');
+            const copyNhanBtn = document.getElementById('copy-nhan-btn');
+            const copyTraBtn = document.getElementById('copy-tra-btn');
+            const resetBtn = document.getElementById('reset-btn');
+            const resultsWrapper = document.getElementById('results-wrapper');
+            const emptyState = document.getElementById('empty-state');
+            const totalRevenueLarge = document.getElementById('total-revenue-large');
+            const totalBurgersEl = document.getElementById('total-burgers');
+            const toast = document.getElementById('toast');
+
+            const formatCurrency = (amount) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
+
+            // --- 1. TẠO GIAO DIỆN NHẬP LIỆU THÔNG MINH (+/-) ---
+            items.forEach(item => {
+                const itemRow = document.createElement('div');
+                itemRow.className = 'flex justify-between items-center bg-white p-1 rounded-lg';
+                
+                const itemName = document.createElement('label');
+                itemName.textContent = item;
+                itemName.className = 'text-sm text-gray-700 font-bold w-1/3';
+                
+                const controlsWrapper = document.createElement('div');
+                controlsWrapper.className = 'flex w-2/3 justify-around gap-1';
+
+                const id = item.replace(/\s+/g, '-');
+
+                // Hàm tạo cụm nhập liệu với nút +/-
+                const createControl = (type) => {
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'flex items-center bg-gray-50 rounded-lg border border-gray-200 overflow-hidden';
+
+                    const btnMinus = document.createElement('button');
+                    btnMinus.innerHTML = '−';
+                    btnMinus.className = 'w-6 h-9 flex items-center justify-center text-gray-500 hover:bg-gray-200 active:bg-gray-300 font-bold text-lg';
+                    
+                    const input = document.createElement('input');
+                    input.type = 'number';
+                    input.min = '0';
+                    input.id = `item-${type}-${id}`;
+                    input.className = `quantity-input w-10 h-9 bg-transparent text-center font-bold text-sm focus:outline-none ${type === 'tra' ? 'text-red-600' : 'text-blue-600'}`;
+                    input.placeholder = '0';
+                    
+                    const btnPlus = document.createElement('button');
+                    btnPlus.innerHTML = '+';
+                    btnPlus.className = 'w-6 h-9 flex items-center justify-center text-gray-500 hover:bg-gray-200 active:bg-gray-300 font-bold text-lg';
+
+                    // Logic nút bấm
+                    btnMinus.onclick = () => {
+                        let val = parseInt(input.value) || 0;
+                        if (val > 0) input.value = val - 1;
+                        else input.value = '';
+                        saveData();
+                    };
+                    btnPlus.onclick = () => {
+                        let val = parseInt(input.value) || 0;
+                        input.value = val + 1;
+                        saveData();
+                    };
+                    input.addEventListener('input', saveData);
+
+                    wrapper.appendChild(btnMinus);
+                    wrapper.appendChild(input);
+                    wrapper.appendChild(btnPlus);
+                    return wrapper;
+                };
+
+                controlsWrapper.appendChild(createControl('nhan'));
+                controlsWrapper.appendChild(createControl('tra'));
+                
+                itemRow.appendChild(itemName);
+                itemRow.appendChild(controlsWrapper);
+                itemList.appendChild(itemRow);
+            });
+
+            // --- LƯU & TẢI ---
+            function saveData() {
+                const data = {};
+                document.querySelectorAll('.quantity-input').forEach(input => { if (input.value) data[input.id] = input.value; });
+                localStorage.setItem('burgerApp_data_v10', JSON.stringify(data));
+            }
+
+            function loadData() {
+                const savedData = localStorage.getItem('burgerApp_data_v10');
+                if (savedData) {
+                    const data = JSON.parse(savedData);
+                    for (const [id, value] of Object.entries(data)) {
+                        const input = document.getElementById(id);
+                        if (input) input.value = value;
+                    }
+                    // Không tính toán ngay để tránh pháo hoa nổ lúc mở app, chỉ tính khi người dùng bấm
+                }
+            }
+
+            resetBtn.addEventListener('click', () => {
+                if(confirm('Xóa hết dữ liệu?')) {
+                    document.querySelectorAll('.quantity-input').forEach(input => input.value = '');
+                    localStorage.removeItem('burgerApp_data_v10');
+                    resultsWrapper.classList.add('hidden');
+                    emptyState.classList.remove('hidden');
+                }
+            });
+
+            // --- COPY CÓ NGÀY GIỜ ---
+            function getTimestamp() {
+                const now = new Date();
+                return `📅 ${now.getDate()}/${now.getMonth()+1} lúc ${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')}`;
+            }
+
+            function copyToClipboard(text) {
+                if (navigator.clipboard) {
+                    navigator.clipboard.writeText(text).then(() => showToast()).catch(() => fallbackCopy(text));
+                } else {
+                    fallbackCopy(text);
+                }
+            }
+
+            function fallbackCopy(text) {
+                const textarea = document.createElement('textarea');
+                textarea.value = text;
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+                showToast();
+            }
+
+            function showToast() {
+                toast.classList.remove('hidden');
+                setTimeout(() => toast.classList.add('hidden'), 2000);
+            }
+
+            copyNhanBtn.addEventListener('click', () => {
+                let text = `${getTimestamp()}\n🟢 NHẬN HÀNG:\n`;
+                items.forEach(item => {
+                    const id = item.replace(/\s+/g, '-');
+                    const val = document.getElementById(`item-nhan-${id}`).value;
+                    if(val && val > 0) text += `${item}: ${val}\n`;
+                });
+                copyToClipboard(text);
+            });
+
+            copyTraBtn.addEventListener('click', () => {
+                let text = `${getTimestamp()}\n🔴 TRẢ HÀNG:\n`;
+                items.forEach(item => {
+                    const id = item.replace(/\s+/g, '-');
+                    const val = document.getElementById(`item-tra-${id}`).value;
+                    if(val && val > 0) text += `${item}: ${val}\n`;
+                });
+                copyToClipboard(text);
+            });
+
+            // --- TÍNH TOÁN & LOGIC THÚ VỊ ---
+            function calculateAndDisplaySummary() {
+                summaryList.innerHTML = ''; 
+                netSalesList.innerHTML = '';
+                
+                const quantities = {}; 
+                const netQuantities = {}; 
+                let hasInput = false;
+                let GRAND_TOTAL = 0;
+                let TOTAL_BURGERS = 0;
+                
+                items.forEach(item => {
+                    const id = item.replace(/\s+/g, '-');
+                    const valNhan = parseInt(document.getElementById(`item-nhan-${id}`).value, 10) || 0;
+                    const valTra = parseInt(document.getElementById(`item-tra-${id}`).value, 10) || 0;
+                    if (valNhan > 0 || valTra > 0) hasInput = true;
+                    
+                    const net = Math.max(0, valNhan - valTra);
+                    quantities[item] = net;     
+                    netQuantities[item] = net;  
+                });
+
+                if (!hasInput) {
+                    resultsWrapper.classList.add('hidden');
+                    emptyState.classList.remove('hidden');
+                    return;
+                }
+
+                resultsWrapper.classList.remove('hidden');
+                emptyState.classList.add('hidden');
+
+                const comboResults = {};
+                let hasItems = false;
+
+                recipes.forEach(recipe => {
+                    let maxCombos = Infinity;
+                    for (const ingredient in recipe.ingredients) {
+                        const required = recipe.ingredients[ingredient];
+                        const available = quantities[ingredient] || 0;
+                        maxCombos = Math.min(maxCombos, Math.floor(available / required));
+                    }
+                    if (maxCombos === Infinity) maxCombos = 0;
+
+                    if (maxCombos > 0) {
+                        hasItems = true;
+                        TOTAL_BURGERS += maxCombos;
+
+                        if (comboResults[recipe.name]) {
+                             comboResults[recipe.name].amount += maxCombos;
+                        } else {
+                             comboResults[recipe.name] = { amount: maxCombos, ...recipe };
+                        }
+                        for (const ingredient in recipe.ingredients) {
+                            quantities[ingredient] -= maxCombos * recipe.ingredients[ingredient];
+                        }
+                    }
+                });
+
+                if (quantities['Vỏ bánh'] > 0) {
+                    TOTAL_BURGERS += quantities['Vỏ bánh'];
+                }
+
+                // Tìm Best Seller (Món bán chạy nhất)
+                let maxSoldQty = 0;
+                let bestSellerName = '';
+                for (const comboName in comboResults) {
+                    if (comboResults[comboName].amount > maxSoldQty) {
+                        maxSoldQty = comboResults[comboName].amount;
+                        bestSellerName = comboName;
+                    }
+                }
+
+                // Hiển thị Combo
+                for (const comboName in comboResults) {
+                    const item = comboResults[comboName];
+                    const totalItemPrice = item.amount * item.price;
+                    GRAND_TOTAL += totalItemPrice;
+                    
+                    // Thêm icon vương miện nếu là Best Seller
+                    let displayName = comboName;
+                    if (comboName === bestSellerName && maxSoldQty > 0) {
+                        displayName = `👑 ${comboName}`;
+                    }
+
+                    appendSummaryItem(displayName, item.amount, totalItemPrice, item.color, item.bgColor);
+                }
+
+                // Hiển thị dư
+                for (const item in quantities) {
+                    if (quantities[item] > 0) {
+                        const pricePerUnit = leftoverPrices[item] || 0;
+                        if (pricePerUnit > 0) {
+                            hasItems = true;
+                            let label = item;
+                            let isRecipeIngredient = false;
+                            for(let r of recipes) { if(r.ingredients[item]) { isRecipeIngredient = true; break; } }
+                            if (isRecipeIngredient) label += " (dư)";
+                            
+                            const totalItemPrice = quantities[item] * pricePerUnit;
+                            GRAND_TOTAL += totalItemPrice;
+                            appendSummaryItem(label, quantities[item], totalItemPrice, 'text-gray-700', 'bg-gray-100');
+                        }
+                    }
+                }
+
+                // Hiển thị Thống kê Ròng
+                for (const item in netQuantities) {
+                    if (netQuantities[item] > 0) {
+                        const li = document.createElement('li');
+                        li.className = "flex justify-between border-b border-gray-200 last:border-0 py-1";
+                        li.innerHTML = `<span>${item}</span><span class="font-bold text-gray-800">${netQuantities[item]}</span>`;
+                        netSalesList.appendChild(li);
+                    }
+                }
+
+                totalRevenueLarge.textContent = formatCurrency(GRAND_TOTAL);
+                totalBurgersEl.textContent = `${TOTAL_BURGERS} cái`;
+                
+                if (!hasItems) summaryList.innerHTML = '<li class="text-gray-500 italic text-center">Không có doanh thu.</li>';
+
+                // --- HIỆU ỨNG PHÁO HOA ---
+                // Nếu doanh thu > 1.000.000đ thì bắn pháo hoa
+                if (GRAND_TOTAL >= 1000000 && typeof confetti === 'function') {
+                    confetti({
+                        particleCount: 150,
+                        spread: 70,
+                        origin: { y: 0.6 },
+                        colors: ['#26ccff', '#a25afd', '#ff5e7e', '#88ff5a', '#fcff42', '#ffa62d', '#ff36ff']
+                    }
